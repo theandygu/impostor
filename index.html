@@ -486,25 +486,23 @@ async function startGame(){
 }
 
 // ── AI GENERATION ──
-async function genWord(cat){
-  const faulty=settings.faultyWord,hint=settings.hint&&!faulty;
-  const extra=faulty
-    ?`- faultyWord: A word from a related but clearly different sub-category (e.g. word="BROCCOLI"→faultyWord="MANGO" since vegetables≠fruits; word="VIOLIN"→faultyWord="TRUMPET"). Plausible enough to describe confidently, but clearly wrong. ALL CAPS.`
-    :hint?`- hint: A closely related but different word the impostor uses to bluff. ALL CAPS.`:'';
-  const shape=faulty?'{"word":"...","faultyWord":"...","category":"..."}'
-    :hint?'{"word":"...","hint":"...","category":"..."}':'{"word":"...","category":"..."}';
-  const res=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',max_tokens:200,
-      system:'You generate words for a social deduction party game. Respond ONLY with valid JSON — no markdown, no backticks, no explanation.',
-      messages:[{role:'user',content:`Generate a word for the category: ${cat.prompt}.\n\nRules:\n- word: concrete, well-known noun. Fun and specific. ALL CAPS.\n${extra}\n- category: short display name e.g. "Food & Drink". Title Case.\n- Be creative — avoid clichés.\n\nReturn ONLY: ${shape}`}]
-    })
+async function genWord(cat) {
+  const faulty = settings.faultyWord;
+  const hint = settings.hint && !faulty;
+  
+  const extra = faulty 
+    ? "Include 'faultyWord': a word from a related but different sub-category." 
+    : hint ? "Include 'hint': a closely related word." : "";
+
+  // This calls your /api/generate.js file
+  const res = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: cat.prompt, extra: extra })
   });
-  if(!res.ok)throw new Error('api');
-  const data=await res.json();
-  const txt=data.content.find(b=>b.type==='text')?.text||'';
-  return JSON.parse(txt.trim());
+
+  if (!res.ok) throw new Error('API offline');
+  return await res.json();
 }
 
 // ── COVER ──
