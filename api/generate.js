@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-pro",
+      model: "gemini-2.5-flash",
       contents: fullPrompt,
     });
     const raw = response.text.replace(/```json|```/g, '').trim();
