@@ -317,6 +317,18 @@ body.light .mode-tab.on{
           </label>
         </div>
       </div>
+      <div class="setting-box">
+        <div class="setting-row">
+          <div>
+            <div class="setting-name">JESTER ROLE</div>
+            <div class="setting-desc">One non-mole gets the normal word, but their card is labeled Jester</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="tog-jester" onchange="onJester(this.checked)">
+            <span class="tog-sl"></span>
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -401,6 +413,10 @@ body.light .mode-tab.on{
     <div class="dos-lbl" id="dos-lbl">THE MOLES</div>
     <div class="dos-cards" id="dos-cards"></div>
   </div>
+  <div style="width:100%" id="jester-box" hidden>
+    <div class="dos-lbl">THE JESTER</div>
+    <div class="dos-cards" id="jester-cards"></div>
+  </div>
   <button class="btn-again" onclick="playAgain()">NEW MISSION</button>
 </div>
 
@@ -413,7 +429,7 @@ let settings = {
   categories: [],
   customCategory: '',
   mode: 'fixed', count: 1,
-  knowEach: false, hint: false, faultyWord: false,
+  knowEach: false, hint: false, faultyWord: false, jester: false,
 };
 let G = {};
 let envOpen = false;
@@ -470,6 +486,7 @@ function init() {
   restoreTheme();
   renderPlayers();
   renderCats();
+  syncCountLimit();
   document.getElementById('btn-expose').onclick = showResults;
 }
 
@@ -491,8 +508,8 @@ function renderPlayers() {
     el.appendChild(row);
   });
 }
-function addPlayer(){if(players.length>=12)return;players.push('');renderPlayers();setTimeout(()=>{document.querySelectorAll('.p-input')[players.length-1]?.focus()},60)}
-function removePlayer(i){if(players.length<=2)return;players.splice(i,1);renderPlayers()}
+function addPlayer(){if(players.length>=12)return;players.push('');renderPlayers();syncCountLimit();setTimeout(()=>{document.querySelectorAll('.p-input')[players.length-1]?.focus()},60)}
+function removePlayer(i){if(players.length<=2)return;players.splice(i,1);renderPlayers();syncCountLimit()}
 
 // ── CATEGORIES (multi-select) ──
 function renderCats(){
@@ -544,14 +561,17 @@ function buildCatDisplay(){
 }
 
 // ── SETTINGS ──
+function maxMoles(){return Math.max(1,players.length-(settings.jester?1:0))}
+function syncCountLimit(){settings.count=Math.min(settings.count,maxMoles());document.getElementById('cnt-num').textContent=settings.count}
 function setMode(m){settings.mode=m;document.getElementById('tab-fixed').className='mode-tab'+(m==='fixed'?' on':'');document.getElementById('tab-rand').className='mode-tab'+(m==='random'?' on':'')}
-function adj(d){settings.count=Math.min(players.length,Math.max(1,settings.count+d));document.getElementById('cnt-num').textContent=settings.count}
+function adj(d){settings.count=Math.min(maxMoles(),Math.max(1,settings.count+d));document.getElementById('cnt-num').textContent=settings.count}
 function onFaulty(on){
   settings.faultyWord=on;
   document.getElementById('box-hint').classList.toggle('disabled',on);
   document.getElementById('box-know').classList.toggle('disabled',on);
   if(on){document.getElementById('tog-hint').checked=false;document.getElementById('tog-know').checked=false;settings.hint=false;settings.knowEach=false}
 }
+function onJester(on){settings.jester=on;syncCountLimit()}
 
 // ── START ──
 async function startGame(){
@@ -560,7 +580,9 @@ async function startGame(){
   settings.knowEach=document.getElementById('tog-know').checked;
   settings.hint=document.getElementById('tog-hint').checked;
   settings.faultyWord=document.getElementById('tog-faulty').checked;
+  settings.jester=document.getElementById('tog-jester').checked;
   settings.customCategory=document.getElementById('cat-custom').value;
+  syncCountLimit();
   document.getElementById('btn-start').disabled=true;
   showScreen('gen');
   const catPrompt=buildCatPrompt();
@@ -575,15 +597,17 @@ async function startGame(){
   }
   let n=settings.count;
   if(settings.mode==='random')n=Math.floor(Math.random()*settings.count)+1;
-  n=Math.min(n,names.length);
+  n=Math.min(n,maxMoles(),names.length);
   const idxs=shuffle([...Array(names.length).keys()]);
   const impIdxs=idxs.slice(0,n);
+  const crewIdxs=idxs.slice(n);
+  const jesterIdx=settings.jester&&crewIdxs.length?crewIdxs[0]:-1;
   G={
     word:(wd.word||'UNKNOWN').toUpperCase(),
     hint:(wd.hint||'').toUpperCase(),
     faultyWord:(wd.faultyWord||wd.hint||'').toUpperCase(),
     category:wd.category||catDisplay,
-    names,impIdxs,cardIdx:0,
+    names,impIdxs,jesterIdx,cardIdx:0,
   };
   document.getElementById('btn-start').disabled=false;
   showCover();
@@ -622,13 +646,14 @@ function goToCard(){
 // ── BUILD CARD ──
 function buildCard(){
   const isImp=G.impIdxs.includes(G.cardIdx);
+  const isJester=G.jesterIdx===G.cardIdx;
   const c=document.getElementById('letter-content');
   const d=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
   if(!isImp){
     c.innerHTML=`
       <div class="letter-header"><div class="letter-from">FIELD DIVISION</div><div class="letter-date">${d}</div></div>
       <div class="letter-role-tag">DESIGNATION</div>
-      <div class="letter-role">OPERATIVE</div>
+      <div class="letter-role">${isJester?'JESTER':'OPERATIVE'}</div>
       <div class="letter-div"></div>
       <div class="letter-wlbl">YOUR ASSIGNED WORD</div>
       <div class="letter-word">${G.word}</div>`;
@@ -697,6 +722,17 @@ function showResults(){
     d.innerHTML=`<span class="dc-num">0${i+1}</span><span class="dc-name">${G.names[idx].toUpperCase()}</span>${tag}`;
     dc.appendChild(d);
   });
+  const jesterBox=document.getElementById('jester-box');
+  const jesterCards=document.getElementById('jester-cards');
+  jesterCards.innerHTML='';
+  if(G.jesterIdx>-1){
+    const d=document.createElement('div');d.className='dos-card';
+    d.innerHTML=`<span class="dc-num">J</span><span class="dc-name">${G.names[G.jesterIdx].toUpperCase()}</span>`;
+    jesterCards.appendChild(d);
+    jesterBox.hidden=false;
+  } else {
+    jesterBox.hidden=true;
+  }
   showScreen('results');
 }
 
